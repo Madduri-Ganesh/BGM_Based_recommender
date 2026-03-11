@@ -358,6 +358,11 @@ async def stream_song(song_id: str):
         raise HTTPException(status_code=500, detail="Failed to stream song")
 
 
+@app.get("/")
+async def root():
+    """Simple health check endpoint for Hugging Face Spaces."""
+    return {"message": "BGM Recommender API is running!", "status": "ok"}
+
 # ---------------------------------------------------------------------------
 # Serve frontend (production)
 # ---------------------------------------------------------------------------
