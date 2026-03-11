@@ -2,8 +2,7 @@
  * API client for communicating with the FastAPI backend.
  */
 
-const BASE = '';  // Proxied via Vite dev server
-
+const BASE = import.meta.env.VITE_API_URL || '';  // Proxied via Vite dev server or remote URL
 /**
  * Upload an audio file. Returns { job_id, uploaded_file }.
  */
