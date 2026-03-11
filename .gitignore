@@ -29,7 +29,6 @@ FMA Data/
 # Generated index & data
 backend/FMA_bgm_index.faiss
 backend/FMA_song_ids.json
-backend/quickstart.py
 
 # Misc / scratch
 misc/

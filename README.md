@@ -46,6 +46,7 @@ A music recommendation system that finds similar songs based on **background mus
 BGM_Based_recommender/
 ├── backend/
 │   ├── app.py                  # FastAPI backend (upload, progress, streaming)
+│   ├── build_index.py          # Script to download FMA data and build the FAISS index
 │   ├── FMA_bgm_index.faiss     # FAISS index (generated — see setup)
 │   └── FMA_song_ids.json       # Song ID mapping (generated — see setup)
 ├── frontend/                   # Vite + vanilla JS frontend
@@ -99,11 +100,17 @@ You need to download the FMA songs from Google Drive, encode them with `music2la
 To set up Google Drive API access, follow the official guide:
 👉 [Google Drive API Python Quickstart](https://developers.google.com/workspace/drive/api/quickstart/python)
 
-Once configured, write a script that:
-1. Downloads audio files from the Google Drive folder specified by `DRIVE_FOLDER_ID`
-2. Encodes each file into a latent vector using `music2latent`
-3. Builds a FAISS `IndexFlatL2` and saves it as `backend/FMA_bgm_index.faiss`
-4. Saves the ordered song IDs as `backend/FMA_song_ids.json`
+Once configured, you can use the provided script to generate the required files:
+
+```bash
+python backend/build_index.py
+```
+
+This script will:
+1. Download audio files from the Google Drive folder specified by `DRIVE_FOLDER_ID`
+2. Encode each file into a latent vector using `music2latent`
+3. Build a FAISS `IndexFlatL2` and save it as `backend/FMA_bgm_index.faiss`
+4. Save the ordered song IDs as `backend/FMA_song_ids.json`
 
 ### 5. Install & build the frontend
 
