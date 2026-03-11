@@ -1,3 +1,13 @@
+---
+title: BGM Music Recommender
+emoji: 🎵
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_file: app.py
+pinned: false
+---
+
 # 🎵 BGM-Based Music Recommender
 
 A music recommendation system that finds similar songs based on **background music (BGM)** analysis. Upload any audio file, and the system encodes it into a latent vector using [music2latent](https://github.com/SonyCSLParis/music2latent), then searches a FAISS similarity index built from the [FMA dataset](https://github.com/mdeff/fma) to return the most similar tracks — complete with in-browser playback.
