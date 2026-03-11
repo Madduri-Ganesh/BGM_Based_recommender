@@ -1,0 +1,118 @@
+/* ===================================================================
+   Audio Player Styles
+   =================================================================== */
+
+.audio-player {
+    width: 100%;
+}
+
+.audio-player .waveform-container {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    min-height: 64px;
+    cursor: pointer;
+}
+
+.audio-player .player-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.audio-player .player-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.audio-player .player-seek-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.audio-player .seek-bar {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 4px;
+    background: var(--wave-idle);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    min-width: 60px;
+}
+
+.audio-player .seek-bar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+}
+
+.audio-player .seek-bar::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    border: none;
+    cursor: pointer;
+}
+
+.audio-player .volume-area {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-left: auto;
+}
+
+.audio-player .volume-icon {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-width: 20px;
+    text-align: center;
+}
+
+.audio-player .player-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 64px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.audio-player .player-loading .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-idle);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .audio-player .player-row {
+        gap: 0.375rem;
+    }
+
+    .audio-player .volume-area {
+        display: none;
+    }
+}

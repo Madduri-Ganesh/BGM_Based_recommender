@@ -1,0 +1,119 @@
+/* ===================================================================
+   Processing Screen Styles
+   =================================================================== */
+
+.processing-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.processing-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    gap: 2rem;
+}
+
+/* Pulsing waveform animation */
+.processing-visual {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    height: 80px;
+}
+
+.wave-bar {
+    width: 6px;
+    background: var(--accent-primary);
+    border-radius: 3px;
+    animation: waveBar 1.2s ease-in-out infinite;
+}
+
+.wave-bar:nth-child(1) {
+    height: 20px;
+    animation-delay: 0s;
+}
+
+.wave-bar:nth-child(2) {
+    height: 40px;
+    animation-delay: 0.1s;
+}
+
+.wave-bar:nth-child(3) {
+    height: 60px;
+    animation-delay: 0.2s;
+}
+
+.wave-bar:nth-child(4) {
+    height: 80px;
+    animation-delay: 0.3s;
+}
+
+.wave-bar:nth-child(5) {
+    height: 50px;
+    animation-delay: 0.4s;
+}
+
+.wave-bar:nth-child(6) {
+    height: 70px;
+    animation-delay: 0.5s;
+}
+
+.wave-bar:nth-child(7) {
+    height: 35px;
+    animation-delay: 0.6s;
+}
+
+.wave-bar:nth-child(8) {
+    height: 55px;
+    animation-delay: 0.7s;
+}
+
+.wave-bar:nth-child(9) {
+    height: 25px;
+    animation-delay: 0.8s;
+}
+
+@keyframes waveBar {
+
+    0%,
+    100% {
+        transform: scaleY(0.4);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: scaleY(1);
+        opacity: 1;
+    }
+}
+
+.processing-info {
+    text-align: center;
+}
+
+.processing-stage {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    min-height: 1.5em;
+    transition: opacity 200ms ease;
+}
+
+.processing-progress {
+    width: min(400px, 80vw);
+}
+
+.processing-percent {
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}

@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+.venv*/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Credentials / Secrets
+.env
+credentials.json
+token.json
+
+# User uploads
+uploads/
+
+# Large data files
+FMA Data/
+
+# Generated index & data
+backend/FMA_bgm_index.faiss
+backend/FMA_song_ids.json
+backend/quickstart.py
+
+# Misc / scratch
+misc/
+
+# Environment files
+.env.*
+!.env.example
+
+# OS
+.DS_Store

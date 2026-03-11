@@ -1,0 +1,179 @@
+/* ===================================================================
+   Welcome Screen Styles
+   =================================================================== */
+
+.welcome-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+/* --- Radiant Glow Background --- */
+.welcome-glow {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* Central glow orb */
+.welcome-glow::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 48%;
+    width: 600px;
+    height: 600px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+            rgba(168, 85, 247, 0.45) 0%,
+            rgba(124, 58, 237, 0.25) 25%,
+            rgba(88, 28, 135, 0.1) 50%,
+            transparent 70%);
+    filter: blur(40px);
+    animation: glowPulse 4s ease-in-out infinite;
+}
+
+/* Horizontal light streak */
+.welcome-glow::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 48%;
+    height: 2px;
+    background: linear-gradient(90deg,
+            transparent 5%,
+            rgba(168, 85, 247, 0.05) 20%,
+            rgba(168, 85, 247, 0.3) 40%,
+            rgba(196, 130, 255, 0.6) 50%,
+            rgba(168, 85, 247, 0.3) 60%,
+            rgba(168, 85, 247, 0.05) 80%,
+            transparent 95%);
+    box-shadow:
+        0 0 30px 8px rgba(168, 85, 247, 0.15),
+        0 0 80px 20px rgba(168, 85, 247, 0.08);
+    animation: streakPulse 4s ease-in-out infinite;
+}
+
+/* Upper light rays */
+.welcome-rays {
+    position: absolute;
+    left: 50%;
+    top: 48%;
+    width: 0;
+    height: 0;
+    z-index: 0;
+}
+
+.welcome-rays::before,
+.welcome-rays::after {
+    content: '';
+    position: absolute;
+    transform-origin: center center;
+}
+
+/* Left-angled ray */
+.welcome-rays::before {
+    width: 400px;
+    height: 1px;
+    top: 0;
+    left: -200px;
+    background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.15), transparent);
+    transform: rotate(-25deg);
+    filter: blur(1px);
+}
+
+/* Right-angled ray */
+.welcome-rays::after {
+    width: 400px;
+    height: 1px;
+    top: 0;
+    left: -200px;
+    background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.15), transparent);
+    transform: rotate(25deg);
+    filter: blur(1px);
+}
+
+/* Floor reflection */
+.welcome-floor {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 40%;
+    z-index: 0;
+    background: linear-gradient(to bottom,
+            transparent 0%,
+            rgba(168, 85, 247, 0.03) 40%,
+            rgba(168, 85, 247, 0.06) 100%);
+}
+
+@keyframes glowPulse {
+
+    0%,
+    100% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.08);
+    }
+}
+
+@keyframes streakPulse {
+
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* --- Content --- */
+.welcome-content {
+    position: relative;
+    z-index: 1;
+}
+
+.welcome-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 40px rgba(168, 85, 247, 0.3);
+}
+
+.welcome-subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    color: var(--text-secondary);
+    margin-bottom: 3.5rem;
+    font-weight: 400;
+}
+
+.welcome-cta {
+    font-size: 1.1rem;
+    padding: 1rem 2.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 0 32px rgba(168, 85, 247, 0.2);
+}
+
+.welcome-cta:hover {
+    box-shadow: 0 0 48px rgba(168, 85, 247, 0.4);
+}
