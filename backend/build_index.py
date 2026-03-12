@@ -17,6 +17,7 @@ import librosa
 from music2latent import EncoderDecoder
 import tempfile
 import json
+import torch
 
 BACKEND_DIR = Path(__file__).resolve().parent
 BASE_DIR = BACKEND_DIR.parent
@@ -70,12 +71,82 @@ def main():
 
     page_token = None
 
-    d = 7424                           
-    k = 3                            
-    index = faiss.IndexFlatL2(d)     
+    d = 192 # 64 dims * 3 thirds
+    # Switch to Inner Product for Cosine Similarity (requires normalized vectors)
+    index = faiss.IndexFlatIP(d)     
     print(f"Is index trained? {index.is_trained}")
     song_id = []
-    encdec = EncoderDecoder()    
+    encdec = EncoderDecoder() 
+       
+    # Helper to structurally chunk, encode, and pool audio
+    def process_and_pool_audio(waveform, sr, micro_chunk_duration_sec=10):
+        total_length = len(waveform)
+        if total_length == 0:
+            return None
+            
+        # 1. Split into Thirds
+        third_length = total_length // 3
+        thirds = [
+            waveform[0:third_length],
+            waveform[third_length:2*third_length],
+            waveform[2*third_length:]
+        ]
+        
+        micro_chunk_length = micro_chunk_duration_sec * sr
+        third_vectors = []
+        
+        # 2. Process each Third
+        for third_idx, third_wv in enumerate(thirds):
+            if len(third_wv) == 0:
+                # Fallback for extremely short audio where third is empty
+                third_vectors.append(torch.zeros(64))
+                continue
+                
+            chunk_latents = []
+            third_total_len = len(third_wv)
+            
+            # Micro-chunk the Third to save memory
+            for i in range(0, third_total_len, micro_chunk_length):
+                chunk = third_wv[i:min(i + micro_chunk_length, third_total_len)]
+                
+                # music2latent's convolutions will crash if the audio tensor is too small.
+                # If a remainder chunk is less than 1 second (sr), skip it,
+                # unless it's the ONLY chunk (in which case we pad it).
+                if len(chunk) < sr:
+                    if len(chunk_latents) > 0:
+                        continue
+                    else:
+                        pad_len = sr - len(chunk)
+                        chunk = np.pad(chunk, (0, pad_len))
+                
+                if not isinstance(chunk, torch.Tensor):
+                    chunk = torch.tensor(chunk)
+                
+                with torch.no_grad():
+                    latent = encdec.encode(chunk)
+                chunk_latents.append(latent)
+            
+            # Pool the micro-chunks for this Third
+            if chunk_latents:
+                pooled_chunks = []
+                for latent in chunk_latents:
+                    pooled = latent.mean(dim=2) # (1, 64)
+                    pooled_chunks.append(pooled)
+                    
+                # Average all micro-chunks together for this Third
+                third_vector = torch.stack(pooled_chunks).mean(dim=0).squeeze() # (64,)
+            else:
+                third_vector = torch.zeros(64)
+                
+            third_vectors.append(third_vector)
+            
+        # 3. Concatenate the Three Thirds
+        # Results in a (192,) shape vector
+        final_structural_vector = torch.cat(third_vectors) 
+        
+        # Format for FAISS: (1, 192)
+        return final_structural_vector.unsqueeze(0)
+        
     while True:
         results = service.files().list(
             q=query,
@@ -110,14 +181,21 @@ def main():
                 wv, sr = librosa.load(temp_file_path, sr=16000)  
                 print(f"Loaded {file_name} with shape {wv.shape}")
                 
-                latent = encdec.encode(wv)
-                latent_2d = latent.reshape(latent.shape[0], -1).numpy().astype('float32')
+                # Extract structural embeddings via "Plan B"
+                latent = process_and_pool_audio(wv, sr, micro_chunk_duration_sec=10)
+                if latent is None:
+                    continue
+                    
+                latent_2d = latent.numpy().astype('float32') # (1, 192)
                 
                 if latent_2d.shape[1] != d:
-                    print(f"Warning: Dimension mismatch for {file_name}. Expected {d}, got {latent_2d.shape[1]}")
-                    continue 
+                    print(f"Warning: Unexpected dimension mismatch for {file_name}. Expected {d}, got {latent_2d.shape[1]}")
+                    continue
                     
-                # ADD TO FAISS: Note that python FAISS add() only takes the array
+                # Normalize vector for Cosine Similarity
+                faiss.normalize_L2(latent_2d)
+                    
+                # ADD TO FAISS
                 index.add(latent_2d)
                 song_id.append(file_name)
                 print(f"Added latent vector for {file_name} to the index.")
@@ -142,12 +220,12 @@ def main():
             break
 
         # Save the index AFTER processing everything
-    faiss.write_index(index, str(BACKEND_DIR / "FMA_bgm_index.faiss"))
+    faiss.write_index(index, str(BACKEND_DIR / "FMA_V2_V2_bgm_index.faiss"))
     print(f"Successfully saved FAISS index with {index.ntotal} vectors.")
 
-    with open(str(BACKEND_DIR / "FMA_song_ids.json"), "w") as f:
+    with open(str(BACKEND_DIR / "FMA_V2_song_ids.json"), "w") as f:
         json.dump(song_id, f)
-    print("Saved song IDs to FMA_song_ids.json")
+    print("Saved song IDs to FMA_V2_song_ids.json")
 
   except HttpError as error:
     print(f"An API error occurred: {error}")

@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 BACKEND_DIR = Path(__file__).resolve().parent
 BASE_DIR = BACKEND_DIR.parent
-INDEX_PATH = BACKEND_DIR / "FMA_bgm_index.faiss"
-SONG_IDS_PATH = BACKEND_DIR / "FMA_song_ids.json"
+INDEX_PATH = BACKEND_DIR / "FMA_V2_V2_bgm_index.faiss"
+SONG_IDS_PATH = BACKEND_DIR / "FMA_V2_song_ids.json"
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -173,15 +173,73 @@ def process_upload_job(job_id: str, file_path: str):
         logger.info("Job %s: Encoding audio", job_id)
 
         encoder = get_encoder()
-        latent = encoder.encode(waveform)  # (1, 64, time)
 
-        # Flatten to match how quickstart.py built the FAISS index
-        feature_vector = (
-            latent.reshape(latent.shape[0], -1)
-            .detach()
-            .numpy()
-            .astype("float32")
-        )
+        # Helper to structurally chunk, encode, and pool audio
+        def process_and_pool_audio(wv, sr, micro_chunk_duration_sec=10):
+            total_length = len(wv)
+            if total_length == 0:
+                raise ValueError("Audio file is empty.")
+                
+            # 1. Split into Thirds
+            third_length = total_length // 3
+            thirds = [
+                wv[0:third_length],
+                wv[third_length:2*third_length],
+                wv[2*third_length:]
+            ]
+            
+            micro_chunk_length = micro_chunk_duration_sec * sr
+            third_vectors = []
+            
+            # 2. Process each Third
+            for third_idx, third_wv in enumerate(thirds):
+                if len(third_wv) == 0:
+                    third_vectors.append(torch.zeros(64))
+                    continue
+                    
+                chunk_latents = []
+                third_total_len = len(third_wv)
+                
+                # Micro-chunk the Third
+                for i in range(0, third_total_len, micro_chunk_length):
+                    chunk = third_wv[i:min(i + micro_chunk_length, third_total_len)]
+                    
+                    if len(chunk) < sr:
+                        if len(chunk_latents) > 0:
+                            continue
+                        else:
+                            pad_len = sr - len(chunk)
+                            chunk = np.pad(chunk, (0, pad_len))
+                            
+                    if not isinstance(chunk, torch.Tensor):
+                        chunk = torch.tensor(chunk)
+                    
+                    with torch.no_grad():
+                        l = encoder.encode(chunk)
+                    chunk_latents.append(l)
+                
+                # Pool the micro-chunks for this Third
+                if chunk_latents:
+                    pooled_chunks = [l.mean(dim=2) for l in chunk_latents]
+                    third_vector = torch.stack(pooled_chunks).mean(dim=0).squeeze() # (64,)
+                else:
+                    third_vector = torch.zeros(64)
+                    
+                third_vectors.append(third_vector)
+                
+            # 3. Concatenate the Three Thirds
+            final_structural_vector = torch.cat(third_vectors) # (192,)
+            
+            # Format for FAISS: (1, 192)
+            return final_structural_vector.unsqueeze(0)
+
+        latent = process_and_pool_audio(waveform, SAMPLE_RATE, micro_chunk_duration_sec=10)
+        
+        if latent is None:
+            raise ValueError("Failed to process audio chunks.")
+
+        # Convert to numpy for FAISS
+        feature_vector = latent.numpy().astype("float32")
         jobs[job_id]["progress"] = 60
 
         # Stage 3: Finding matches
@@ -192,15 +250,19 @@ def process_upload_job(job_id: str, file_path: str):
         index = get_faiss_index()
         song_ids = get_song_ids()
 
-        # Pad or truncate to match FAISS index dimension
-        index_dim = index.d
+        # Dimension validation
+        index_dim = index.d  # Should be 192
         vec_dim = feature_vector.shape[1]
         if vec_dim != index_dim:
-            logger.warning("Dimension mismatch: vector=%d, index=%d. Adjusting.", vec_dim, index_dim)
+            logger.warning("Dimension mismatch: vector=%d, index=%d.", vec_dim, index_dim)
             if vec_dim < index_dim:
+                # Should practically never happen with structured pooling, but safe fallback
                 feature_vector = np.pad(feature_vector, ((0, 0), (0, index_dim - vec_dim)))
             else:
                 feature_vector = feature_vector[:, :index_dim]
+                
+        # Normalize for Cosine Similarity search
+        faiss.normalize_L2(feature_vector)
 
         distances, indices = index.search(feature_vector, TOP_K)
 
@@ -209,12 +271,14 @@ def process_upload_job(job_id: str, file_path: str):
             if faiss_id == -1:
                 continue
             sid = song_ids[faiss_id]
-            dist = float(distances[0][rank - 1])
+            # Since we switched to Cosine Similarity (IndexFlatIP),
+            # 'distances' are actually similarity scores where higher is better.
+            sim_score = float(distances[0][rank - 1])
             results.append({
                 "rank": rank,
                 "song_id": sid,
                 "title": extract_title(sid),
-                "distance": dist,
+                "distance": sim_score, # Keep 'distance' key for frontend compatibility
             })
 
         jobs[job_id]["progress"] = 100
@@ -334,8 +398,8 @@ async def stream_song(song_id: str):
     try:
         service = get_drive_service()
 
-        # Convert cleaned song ID back to the original filename on Drive
-        drive_filename = song_id.replace(".mp3", "_(Instrumental)_model_bs_roformer_ep_317_sdr_12.mp3")
+        # The song_id from the database is already the exact filename on Drive
+        drive_filename = song_id
 
         # Search for the file by name in the drive folder
         query = f"name='{drive_filename}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false"
