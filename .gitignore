@@ -26,10 +26,6 @@ uploads/
 # Large data files
 FMA Data/
 
-# Generated index & data
-backend/FMA_bgm_index.faiss
-backend/FMA_song_ids.json
-
 # Misc / scratch
 misc/
 
