@@ -110,7 +110,18 @@ def get_drive_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GOOGLE_SCOPES)
+            if "GOOGLE_CREDENTIALS_JSON" in os.environ:
+                try:
+                    creds_data = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
+                    flow = InstalledAppFlow.from_client_config(creds_data, GOOGLE_SCOPES)
+                    logger.info("Loaded Google client secrets from GOOGLE_CREDENTIALS_JSON environment variable.")
+                except Exception as e:
+                    logger.error("Failed to parse GOOGLE_CREDENTIALS_JSON: %s", e)
+                    # Fallback to local file
+                    flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GOOGLE_SCOPES)
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GOOGLE_SCOPES)
+            
             creds = flow.run_local_server(port=0)
         
         # Only try to save the file locally if running on a local machine (not HF Space)
