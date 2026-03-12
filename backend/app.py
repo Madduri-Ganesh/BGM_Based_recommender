@@ -96,7 +96,14 @@ def get_drive_service():
     token_path = BASE_DIR / "token.json"
     creds_path = BASE_DIR / "credentials.json"
 
-    if token_path.exists():
+    if "GOOGLE_TOKEN_JSON" in os.environ:
+        try:
+            token_data = json.loads(os.environ["GOOGLE_TOKEN_JSON"])
+            creds = Credentials.from_authorized_user_info(token_data, GOOGLE_SCOPES)
+            logger.info("Loaded Google credentials from GOOGLE_TOKEN_JSON environment variable.")
+        except Exception as e:
+            logger.error("Failed to parse GOOGLE_TOKEN_JSON: %s", e)
+    elif token_path.exists():
         creds = Credentials.from_authorized_user_file(str(token_path), GOOGLE_SCOPES)
 
     if not creds or not creds.valid:
@@ -105,8 +112,14 @@ def get_drive_service():
         else:
             flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GOOGLE_SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
+        
+        # Only try to save the file locally if running on a local machine (not HF Space)
+        if "GOOGLE_TOKEN_JSON" not in os.environ:
+            try:
+                with open(token_path, "w") as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                logger.warning("Could not save token.json: %s", e)
 
     _drive_service = build("drive", "v3", credentials=creds)
     return _drive_service
