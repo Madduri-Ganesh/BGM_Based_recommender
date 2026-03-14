@@ -61,7 +61,7 @@ def main():
   try:
     service = build("drive", "v3", credentials=creds)
 
-    folder_id = os.environ.get("DRIVE_FOLDER_ID", "")
+    folder_id = os.environ.get("BGM_DRIVE_FOLDER_ID", "")
     if not folder_id:
         print("ERROR: DRIVE_FOLDER_ID environment variable is not set.")
         return
@@ -220,12 +220,12 @@ def main():
             break
 
         # Save the index AFTER processing everything
-    faiss.write_index(index, str(BACKEND_DIR / "FMA_V2_V2_bgm_index.faiss"))
+    faiss.write_index(index, str(BACKEND_DIR / "Music_data_bgm_index.faiss"))
     print(f"Successfully saved FAISS index with {index.ntotal} vectors.")
 
-    with open(str(BACKEND_DIR / "FMA_V2_song_ids.json"), "w") as f:
+    with open(str(BACKEND_DIR / "Music_data_song_ids.json"), "w") as f:
         json.dump(song_id, f)
-    print("Saved song IDs to FMA_V2_song_ids.json")
+    print("Saved song IDs to Music_data_song_ids.json")
 
   except HttpError as error:
     print(f"An API error occurred: {error}")

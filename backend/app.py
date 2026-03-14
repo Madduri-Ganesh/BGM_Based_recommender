@@ -11,8 +11,19 @@ import json
 import logging
 import tempfile
 import threading
+import re
 from pathlib import Path
 from typing import Optional
+
+# Standardize environment variables to prevent segmentation faults and OpenMP conflicts on macOS 3.12 
+# caused by multiple OpenMP-using libraries (FAISS, Torch, ONNX Runtime).
+import platform
+if platform.system() == "Darwin":
+    import os
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -33,6 +44,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from audio_separator.separator import Separator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,8 +54,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 BACKEND_DIR = Path(__file__).resolve().parent
 BASE_DIR = BACKEND_DIR.parent
-INDEX_PATH = BACKEND_DIR / "FMA_V2_V2_bgm_index.faiss"
-SONG_IDS_PATH = BACKEND_DIR / "FMA_V2_song_ids.json"
+INDEX_PATH = BACKEND_DIR / "Music_data_bgm_index.faiss"
+SONG_IDS_PATH = BACKEND_DIR / "Music_data_song_ids.json"
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -138,15 +150,33 @@ def get_drive_service():
 
 def extract_title(song_id: str) -> str:
     """Extract a human-readable title from song filename."""
-    # Remove the model suffix like _(Instrumental)_model_bs_roformer_ep_317_sdr_12.mp3
     name = song_id
-    idx = name.find("_(Instrumental)")
-    if idx != -1:
-        name = name[:idx]
-    else:
-        name = name.rsplit(".", 1)[0]  # remove extension
-    # Replace underscores with spaces
-    name = name.replace("_", " ")
+    
+    # 1. Remove common model/separation suffixes and extensions
+    # Matches patterns like _(Instrumental)_... followed by an extension
+    name = re.sub(r'_\(Instrumental\).*\.(mp3|wav|flac)$', '', name, flags=re.IGNORECASE)
+    # Fallback: just remove standard extension
+    name = re.sub(r'\.(mp3|wav|flac)$', '', name, flags=re.IGNORECASE)
+    
+    # 2. Remove common marketing/platform labels
+    junk_labels = [
+        "OUT NOW!",
+        "NCS Release",
+        "(Official Video)",
+        "(Official Audio)",
+        "(Lyric Video)",
+        "[NCS Release]",
+        "(Official Music Video)"
+    ]
+    
+    for label in junk_labels:
+        # Use regex to match labels regardless of surrounding case
+        name = re.sub(re.escape(label), '', name, flags=re.IGNORECASE)
+
+    # 3. Clean up formatting
+    name = name.replace("_", " ")  # Convert underscores to spaces
+    name = re.sub(r'\s+', ' ', name) # Collapse multiple spaces
+    
     return name.strip()
 
 
@@ -159,13 +189,37 @@ jobs: dict = {}
 def process_upload_job(job_id: str, file_path: str):
     """Run the full pipeline in a background thread, updating job status."""
     try:
-        # Stage 1: Loading audio
-        jobs[job_id]["stage"] = "Loading audio..."
-        jobs[job_id]["progress"] = 10
-        logger.info("Job %s: Loading audio from %s", job_id, file_path)
+        jobs[job_id]["stage"] = "Separating Vocals..."
+        jobs[job_id]["progress"] = 15
+        logger.info("Job %s: Separating BGM from %s", job_id, file_path)
 
-        waveform, _ = librosa.load(file_path, sr=SAMPLE_RATE)
-        jobs[job_id]["progress"] = 25
+        # Initialize separator and move to instrumental stem
+        separator = Separator(output_format="MP3", output_dir=str(UPLOAD_DIR))
+
+        # FIX: Disable CoreMLExecutionProvider to prevent crashes on Python 3.12
+        # We've already set thread limits globally, but disabling CoreML here
+        # ensures we use the more stable CPU/MPS path for ONNX.
+        if separator.onnx_execution_provider and "CoreMLExecutionProvider" in separator.onnx_execution_provider:
+            logger.info("Job %s: Disabling CoreMLExecutionProvider for stability", job_id)
+            separator.onnx_execution_provider = ["CPUExecutionProvider"]
+
+        separator.load_model("UVR-MDX-NET-Inst_HQ_4.onnx")
+        
+        # Audio separator will output files in the same directory as input
+        separated_files = separator.separate(file_path)
+        
+        # Identify instrumental path (bgm)
+        try:
+            instrumental_path = next(f for f in separated_files if "Instrumental" in f)
+            # Full absolute path for librosa
+            work_path = str(Path(file_path).parent / instrumental_path)
+            logger.info("Job %s: Separation complete. Using instrumental: %s", job_id, work_path)
+        except StopIteration:
+            logger.warning("Job %s: Could not find instrumental stem. Falling back to original audio.", job_id)
+            work_path = file_path
+
+        waveform, _ = librosa.load(work_path, sr=SAMPLE_RATE)
+        jobs[job_id]["progress"] = 35
 
         # Stage 2: Extracting features
         jobs[job_id]["stage"] = "Extracting features..."
@@ -300,9 +354,19 @@ def process_upload_job(job_id: str, file_path: str):
             import time
             time.sleep(1800)  # 30 minutes
             try:
+                # Clean up original upload
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                    logger.info("Job %s: Cleaned up uploaded file %s (delayed)", job_id, file_path)
+                    logger.info("Job %s: Cleaned up original file %s", job_id, file_path)
+                
+                # Clean up separated stems if they exist
+                # separated_files is available in the closure if we store it
+                # For simplicity, we can just look for files starting with the job_id in the upload dir
+                upload_dir = Path(file_path).parent
+                for stem_file in upload_dir.glob(f"*{job_id}*"):
+                    if stem_file.is_file():
+                        stem_file.unlink()
+                        logger.info("Job %s: Cleaned up stem file %s", job_id, stem_file.name)
             except OSError:
                 pass
 
@@ -401,7 +465,7 @@ async def stream_song(song_id: str):
         # The song_id from the database is already the exact filename on Drive
         drive_filename = song_id
 
-        # Search for the file by name in the drive folder
+        # Search for the file by name in the full song drive folder
         query = f"name='{drive_filename}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false"
         result = service.files().list(
             q=query,
