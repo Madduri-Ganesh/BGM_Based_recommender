@@ -462,11 +462,18 @@ async def stream_song(song_id: str):
     try:
         service = get_drive_service()
 
-        # The song_id from the database is already the exact filename on Drive
-        drive_filename = song_id
+        # Clean the song_id (filename) to remove the UVR suffix before searching on Drive
+        # We remove the specific suffix (possibly repeated) but keep the original extension
+        uvr_suffix_pattern = r'(_\(Instrumental\)_UVR-MDX-NET-Inst_HQ_4)+'
+        drive_filename = re.sub(uvr_suffix_pattern, '', song_id)
+        
+        # Escape single quotes for the Google Drive query (Standard Drive API requirement)
+        escaped_filename = drive_filename.replace("'", "\\'")
+        
+        logger.info("Streaming song: %s -> Searching Drive as: %s", song_id, drive_filename)
 
         # Search for the file by name in the full song drive folder
-        query = f"name='{drive_filename}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false"
+        query = f"name='{escaped_filename}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false"
         result = service.files().list(
             q=query,
             fields="files(id, name, mimeType)",
